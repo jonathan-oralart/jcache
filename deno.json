@@ -1,0 +1,10 @@
+{
+  "name": "@jonpdw/jcache",
+  "version": "0.0.2",
+  "exports": "./mod.ts",
+  "license": "MIT",
+  "tasks": {
+    "dev": "deno run --watch main.ts"
+  },
+  "imports": {}
+}
