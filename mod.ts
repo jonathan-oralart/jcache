@@ -1,9 +1,9 @@
 import { ensureDirSync } from "jsr:@std/fs@1";
 import { join } from "jsr:@std/path@1";
 
-export const cacheRead: boolean = Deno.env.get("JCACHE_READ") === "true";
+const cacheRead: boolean = Deno.env.get("JCACHE_READ") === "true";
 
-export const cacheWrite: boolean = Deno.env.get("JCACHE_WRITE") === "true";
+const cacheWrite: boolean = Deno.env.get("JCACHE_WRITE") === "true";
 
 function makeFileNameSafe(path: string): string {
     // Replace slashes with underscores and remove any other potentially problematic characters
