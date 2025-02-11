@@ -118,3 +118,5 @@ export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(fn: 
         return result;
     } as T;
 }
+
+export default jcache;
