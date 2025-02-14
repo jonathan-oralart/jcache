@@ -1,42 +1,99 @@
 # JCache
 
-A simple function result caching system.
+Simple function caching for TypeScript.
 
-## Example
+#### What it does
+- Automatically saves function results to disk
+- Retrieves cached results on subsequent runs
+
+#### Perfect for caching
+- API calls
+- Expensive calculations
+- Database queries
+
+#### Ideal for development
+Speed up your local development by caching external calls. Work offline, iterate faster, and reduce API usage while building your application.
+
+
+## Simple Example
+
 
 ```ts
-// Example of caching an API response
+import { jcache} from "@jonpdw/jcache";
+
+
 const response = await jcache(
-    async function apiCache(): Promise<any> {
+    // ----------- Your function -----------
+    async function api() {
         const response = await fetch('https://jsonplaceholder.typicode.com/posts/1');
         return await response.json();
     }
-)('api-folder-group');
-// ^ cache file will be stored in cache/api-folder-group/apiCache.jsont
-
-// Example of caching a database query
-const data = await jcache(
-    async function queryCache( sql: Sql): Promise<Result> {
-        return await sql`SELECT * FROM table`;
-    }
-)('sql-folder-group', sql);
-//                    ^ these are the arguments passed to the function
+    // ----------- End of function -----------
+)()
 
 ```
 
 ## Output
 ```
 /cache
-    /api-folder-group
-        /apiCache.jsont
-    /sql-folder-group
-        /queryCache.jsont
+    /api.json
 ```
 
-## Environment Variables
+## Complex Example
 
-- `JCACHE_READ`: Set to "true" to enable reading from cache
-- `JCACHE_WRITE`: Set to "true" to enable writing to cache
+
+```ts
+import { jcache, jcacheWriteOnly, config } from "@jonpdw/jcache";
+
+config.cacheFileExtension = "json" // (default = "json")
+config.production = true           // (default = false) will disable read or write to the cache
+config.cacheFolder = "cache"       // (default = "cache")
+
+
+interface Post {
+    userId: number;
+    id: number;
+    title: string;
+    body: string;
+}
+
+const response = await jcache({ subfolder: 'api' },
+    async function api(postNumber: number): Promise<Post> {
+        const response = await fetch(`https://jsonplaceholder.typicode.com/posts/${postNumber}`);
+        return await response.json();
+    }
+)(1)
+
+const response2 = await jcacheWriteOnly({ subfolder: 'apiWriteOnly' },
+    async function apiWriteOnly(postNumber: number): Promise<any> {
+        const response = await fetch(`https://jsonplaceholder.typicode.com/posts/${postNumber}`);
+        return await response.json();
+    }
+)(2)
+```
+
+### Output
+```
+/cache
+    /api
+        /api.json
+    /apiWriteOnly
+        /apiWriteOnly.json
+```
+
+### Shell Output
+```bash
+~/Repos/JSR/jcache deno --allow-all test.ts   
+cache/api                     /api                                                         : 0.1s     
+cache/                        /apiWriteOnly                                                : 0.1s  
+```
+
+
+
+
+
+
+
 
 
 

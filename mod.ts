@@ -1,9 +1,11 @@
 import { ensureDirSync } from "jsr:@std/fs@1";
 import { join } from "jsr:@std/path@1";
 
-const cacheRead: boolean = Deno.env.get("JCACHE_READ") === "true";
-
-const cacheWrite: boolean = Deno.env.get("JCACHE_WRITE") === "true";
+export const config = {
+    production: false,
+    cacheFolder: "cache",
+    cacheFileExtension: "json"
+};
 
 function makeFileNameSafe(path: string): string {
     // Replace slashes with underscores and remove any other potentially problematic characters
@@ -19,53 +21,30 @@ function fileExistsSync(path: string): boolean {
     }
 }
 
-/**
- * A decorator function that adds caching capabilities to async functions.
- * Results are cached in JSON files under a `cache` directory in the current working directory.
- * Cache behavior is controlled by JCACHE_READ and JCACHE_WRITE environment variables.
- * 
- * The cache directory structure is organized by:
- * - If first argument is a string: uses that as subfolder name
- * - If first argument is empty string: uses "empty" as subfolder name
- * - Otherwise: uses "global" as subfolder name
- * 
- * @param fn The async function to be cached
- * @returns A wrapped version of the function that implements caching
- * 
- * @example
- * ```ts
- * // Define a cacheable function
- * const fetchDataCache = jcache(async (id: string) => {
- *   const response = await fetch(`https://api.example.com/data/${id}`);
- *   return response.json();
- * });
- * 
- * // Call the function - first time will fetch and cache
- * const data1 = await fetchDataCache("123"); // Writes to cache/123/fetchDataCache.jsont
- * 
- * // Subsequent calls with same args will read from cache if JCACHE_READ=true
- * const data2 = await fetchDataCache("123"); // Reads from cache if exists
- * ```
- */
-export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(fn: T): T {
+interface JCacheOptions {
+    subfolder?: string;
+}
+
+function jcacheBase<T extends (...args: Parameters<T>) => ReturnType<T>>(
+    options: JCacheOptions & { read: boolean; write: boolean },
+    fn: T
+): T {
     return async function (this: ThisParameterType<T>, ...args: Parameters<T>): Promise<ReturnType<T>> {
         const start = performance.now();
 
-        // Store the cache under a subfolder
-        const subFolder = (() => {
-            const args0 = args[0 as keyof typeof args];
-            if (args0 === "") {
-                return "empty";
-            }
-            if (args0 && typeof args0 === 'string') {
-                return args0;
-            }
-            return 'global';
-        })();
+        // Check global production setting first, then local options
+        if (config.production) {
+            options.read = false;
+            options.write = false;
+        }
 
         // Setup cache paths
-        const cacheDir = join(Deno.cwd(), "cache", makeFileNameSafe(subFolder));
-        const cacheFilePath = join(cacheDir, `${fn.name}.jsont`);
+        const cacheDir = options.subfolder
+            ? join(Deno.cwd(), config.cacheFolder, makeFileNameSafe(options.subfolder))
+            : join(Deno.cwd(), config.cacheFolder);
+        const cacheFilePath = join(cacheDir, `${fn.name}.${config.cacheFileExtension}`);
+
+        const subFolder = `${config.cacheFolder}/${options.subfolder ?? ""}`
 
         // Print start of execution
         const padBit = `${subFolder.padEnd(30)}/${fn.name.padEnd(60)}`;
@@ -77,7 +56,7 @@ export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(fn: 
         let didReadFromCache = false;
         let didWriteToCache = false;
 
-        if (cacheRead && fn.name.toLowerCase().endsWith('cache') && fileExistsSync(cacheFilePath)) {
+        if (options.read && fileExistsSync(cacheFilePath)) {
             result = JSON.parse(await Deno.readTextFile(cacheFilePath));
             didReadFromCache = true;
             // Touch the file to update its modified timestamp
@@ -89,7 +68,7 @@ export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(fn: 
             try {
                 result = await fn.apply(this, args);
 
-                if (cacheWrite) {
+                if (options.write) {
                     ensureDirSync(cacheDir);
                     await Deno.writeTextFile(cacheFilePath, JSON.stringify(result, null, 2));
                     didWriteToCache = true;
@@ -117,6 +96,22 @@ export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(fn: 
 
         return result;
     } as T;
+}
+
+export function jcache<T extends (...args: Parameters<T>) => ReturnType<T>>(
+    optionsOrFn: JCacheOptions | T,
+    maybeFn?: T
+): T {
+    const [options, fn] = maybeFn ? [optionsOrFn as JCacheOptions, maybeFn] : [{}, optionsOrFn as T];
+    return jcacheBase({ ...options, read: true, write: true }, fn);
+}
+
+export function jcacheWriteOnly<T extends (...args: Parameters<T>) => ReturnType<T>>(
+    optionsOrFn: JCacheOptions | T,
+    maybeFn?: T
+): T {
+    const [options, fn] = maybeFn ? [optionsOrFn as JCacheOptions, maybeFn] : [{}, optionsOrFn as T];
+    return jcacheBase({ ...options, read: false, write: true }, fn);
 }
 
 export default jcache;
