@@ -1,6 +1,6 @@
 # JCache
 
-Simple function caching for TypeScript.
+Simple function caching between runs
 
 #### What it does
 - Automatically saves function results to disk
